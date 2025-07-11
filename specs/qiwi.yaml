@@ -1,0 +1,171 @@
+openapi: 3.0.3
+info:
+  title: Qiwi Payout API (subset)
+  version: 1.0.0
+  description: >
+    Subset of Qiwi Payout API covering:
+      • list payments,
+      • get payment,
+      • create payment,
+      • get account balance.
+servers:
+  - url: https://b2b-api.qiwi.com/partner/payout/v1/agents/{agentId}/points/{pointId}
+    description: Production
+    variables:
+      agentId:
+        default: yourAgentId
+        description: Идентификатор агента
+      pointId:
+        default: yourPointId
+        description: Идентификатор точки приёма
+paths:
+  /payments:
+    get:
+      summary: Получение всех платежей
+      tags: [Payments]
+      parameters:
+        - name: limit
+          in: query
+          description: Ограничение на число платежей (по умолчанию 20)
+          schema: { type: integer }
+        - name: offset
+          in: query
+          description: Количество платежей, которое нужно пропустить
+          schema: { type: integer }
+        - name: from
+          in: query
+          description: Начальная дата (YYYY-MM-DD)
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Конечная дата (YYYY-MM-DD)
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Список платежей
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PaymentInfo" }
+    post:
+      summary: Создание платежа
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentCreationParams" }
+      responses:
+        "201":
+          description: Платёж создан
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentInfo" }
+  /payments/{paymentId}:
+    get:
+      summary: Получение информации о платеже
+      tags: [Payments]
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Информация о платеже
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentInfo" }
+  /accounts/{accountUid}/balance:
+    get:
+      summary: Получение баланса аккаунта
+      tags: [Accounts]
+      parameters:
+        - name: accountUid
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Баланс аккаунта
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BalanceInfo" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Money:
+      type: object
+      properties:
+        value: { type: string, example: "200.00" }
+        currency: { type: string, example: RUB }
+      required: [value, currency]
+    BalanceInfo:
+      type: object
+      properties:
+        balance:   { $ref: "#/components/schemas/Money" }
+        overdraft: { $ref: "#/components/schemas/Money" }
+        available: { $ref: "#/components/schemas/Money" }
+      required: [balance, overdraft, available]
+    PaymentStatus:
+      type: object
+      properties:
+        value:
+          type: string
+          enum: [PENDING, COMPLETED, REJECTED, FAILED, CANCELLED]
+        changedDateTime: { type: string, format: date-time }
+    RecipientDetails:
+      type: object
+      properties:
+        providerCode: { type: string }
+        fields:
+          type: object
+          additionalProperties: { type: string }
+    PaymentInfo:
+      type: object
+      properties:
+        paymentId: { type: string, format: uuid }
+        creationDateTime:   { type: string, format: date-time }
+        expirationDatetime: { type: string, format: date-time }
+        status:             { $ref: "#/components/schemas/PaymentStatus" }
+        recipientDetails:   { $ref: "#/components/schemas/RecipientDetails" }
+        amount:             { $ref: "#/components/schemas/Money" }
+        commission:         { $ref: "#/components/schemas/Money" }
+        customer:
+          type: object
+          properties:
+            account: { type: string }
+            email:   { type: string, format: email }
+            phone:   { type: string }
+        source:
+          type: object
+          properties:
+            paymentType:         { type: string }
+            paymentToolType:     { type: string }
+            paymentTerminalType: { type: string }
+            paymentDate:         { type: string, format: date-time }
+            extraCharge:         { $ref: "#/components/schemas/Money" }
+        customFields:
+          type: object
+          additionalProperties: { type: string }
+        callbackUrl:        { type: string, format: uri }
+        IdentificationType: { type: string }
+        billingDetails:
+          type: object
+          properties:
+            transactionId: { type: string }
+            rrn:           { type: string }
+      required: [paymentId, amount, status]
+    PaymentCreationParams:
+      allOf:
+        - $ref: "#/components/schemas/PaymentInfo"
+      required:
+        - recipientDetails
+        - amount
+security:
+  - bearerAuth: []
